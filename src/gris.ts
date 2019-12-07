@@ -24,7 +24,7 @@ const defaultHost = "https://prod-jp.lovelive.ge.klabgames.net"
 const defaultApplicationId = 626776655    // application ID in iTunes
 const defaultPlatform: platformType = platformType.iOS
 const defaultOsVersion = "iPhone10_1 iPhone 11.3"
-const defaultClientVersion = "41.3"
+const defaultClientVersion = "41.4"
 const defaultBundleVersion = "6.9.1"
 const defaultNames = [
   "真面目な学院生", "明るい学院生", "心優しい学院生", "アイドル好きの学院生", "期待の学院生", "頼りになる学院生",
@@ -32,7 +32,7 @@ const defaultNames = [
   "幻の学院生", "天然な学院生", "癒し系な学院生", "純粋な学院生", "正義感あふれる学院生", "カラオケ好きの学院生", "不思議な学院生",
 ]
 
-interface IConstructor {
+export interface IConfig {
   host?: string
   gameMode?: gameMode
   platformType?: platformType
@@ -49,7 +49,7 @@ interface IConstructor {
   applicationKey: string
 }
 
-interface ISession {
+export interface ISession {
   authToken: string
   userId: number
   mgd: gameMode
@@ -59,7 +59,7 @@ interface ISession {
   clientVersion: string
 }
 
-interface IKeychain {
+export interface IKeychain {
   rsaPublicKey: string
   applicationKey: string
   baseKey: string
@@ -68,7 +68,7 @@ interface IKeychain {
   sessionKey: Buffer
 }
 
-interface IAuthorize {
+export interface IAuthorize {
   consumerKey: string
   timeStamp: number
   version: "1.1"
@@ -76,7 +76,7 @@ interface IAuthorize {
   token?: string
 }
 
-interface IServerResponse<T extends any> {
+export interface IServerResponse<T extends any> {
   response_data: T
   release_info: Array<{
     id: number
@@ -85,7 +85,7 @@ interface IServerResponse<T extends any> {
   status_code: number
 }
 
-interface IAPIRequestOptions {
+export interface IAPIRequestOptions {
   excludeDefaultValues?: boolean
   useSpecialKey?: boolean
 }
@@ -128,7 +128,7 @@ export class Gris {
   private osVersion = defaultOsVersion
   private platformType = defaultPlatform
   private applicationId = defaultApplicationId
-  constructor(options: IConstructor) {
+  constructor(options: IConfig) {
     if (
       options.loginKey?.length === 36 &&
       options.loginKey?.match(/^[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/gi)
