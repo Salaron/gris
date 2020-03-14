@@ -24,8 +24,8 @@ const defaultHost = "https://prod-jp.lovelive.ge.klabgames.net"
 const defaultApplicationId = 626776655    // application ID in iTunes
 const defaultPlatform: platformType = platformType.iOS
 const defaultOsVersion = "iPhone10_1 iPhone 11.3"
-const defaultClientVersion = "41.4"
-const defaultBundleVersion = "6.9.1"
+const defaultClientVersion = "42.4"
+const defaultBundleVersion = "6.10.2"
 const defaultNames = [
   "真面目な学院生", "明るい学院生", "心優しい学院生", "アイドル好きの学院生", "期待の学院生", "頼りになる学院生",
   "素直な学院生", "さすらいの学院生", "気になる学院生", "憧れの学院生", "元気な学院生", "勇敢な学院生", "さわやかな学院生",
@@ -86,7 +86,7 @@ export interface IServerResponse<T extends any> {
 }
 
 export interface IAPIRequestOptions {
-  excludeDefaultValues?: boolean
+  excludeDefaultParams?: boolean
   useSpecialKey?: boolean
 }
 
@@ -110,7 +110,7 @@ export class Gris {
     authToken: "",
     userId: 0,
     nonce: 0,
-    commandNum: 2, // not same as nonce. increment only if it was in requestData and request was successful
+    commandNum: 2, // not same as nonce. increment only if it was in requestData and request *was* successful
     mgd: gameMode.AQOURS,
     bundleVersion: defaultBundleVersion,
     clientVersion: defaultClientVersion,
@@ -179,8 +179,6 @@ export class Gris {
     loginKey?: string,
     loginPasswd?: string
   } = {}) {
-    this.session.bundleVersion = await this.getLatestBundleVersion()
-
     if (typeof options.loginKey !== "string" || typeof options.loginPasswd !== "string") {
       // generate new credentials if not specifiend
       const [loginKey, loginPasswd] = Gris.generateCredentials()
@@ -207,7 +205,7 @@ export class Gris {
       ),
     }
     const startUpResponseData = await this.APIRequest("login/startUp", startUpRequestData, {
-      excludeDefaultValues: true,
+      excludeDefaultParams: true,
     })
     debug(`Registered new account #${startUpResponseData.response_data.user_id}`)
     await this.login()
@@ -298,7 +296,7 @@ export class Gris {
       excluded_package_ids: [],
       commandNum: null,
     }, {
-      excludeDefaultValues: true,
+      excludeDefaultParams: true,
     })
     await this.APIRequest("lbonus/execute")
     await this.startupMultiRequest()
@@ -320,8 +318,6 @@ export class Gris {
       !this.keychain.loginPasswd.match(/^[0-9A-Z]{128}/gi)
     ) throw new Error(`login passwd is not specified or it have invalid format`)
 
-    this.session.bundleVersion = await this.getLatestBundleVersion()
-
     await this.doAuth()
     const loginRequestData = {
       login_key: aes128cbcEncrypt(
@@ -336,7 +332,7 @@ export class Gris {
       ),
     }
     const loginResponseData = await this.APIRequest("login/login", loginRequestData, {
-      excludeDefaultValues: true,
+      excludeDefaultParams: true,
     })
 
     this.session.userId = loginResponseData.response_data.user_id
@@ -362,7 +358,7 @@ export class Gris {
     if ("timeStamp" in requestData) requestData.timeStamp = timeStamp()
     if ("mgd" in requestData) requestData.mgd = this.gameMode
     if ("commandNum" in requestData) requestData.commandNum = `${this.keychain.loginKey}.${timeStamp()}.${this.session.commandNum}`
-    if (!options.excludeDefaultValues) {
+    if (!options.excludeDefaultParams) {
       const endPointSplit = endPoint.split("/")
       requestData.module = endPointSplit[0]
       requestData.action = endPointSplit[1]
@@ -427,6 +423,11 @@ export class Gris {
     ])
   }
 
+  public async updateVersionInfo(): Promise<void> {
+    this.session.bundleVersion = await this.getLatestBundleVersion()
+    this.session.clientVersion = await this.getLatestServerVersion()
+  }
+
   /**
    * Get latest version of application from iTunes
    * @param applicationId Application ID
@@ -439,7 +440,17 @@ export class Gris {
     return JSON.parse(response.text).results[0].version
   }
 
-  public getHeaders() {
+  /**
+   * Used to retrieve current version of server from llsif.win
+   * @returns {string} Current server version
+   */
+  public async getLatestServerVersion(): Promise<string> {
+    const url = "https://r.llsif.win/config/server_info.json"
+    const response = await request.get(url)
+    return JSON.parse(response.text).server_version
+  }
+
+  protected getHeaders() {
     return <{ [header: string]: string }>{
       "Accept": "*/*",
       "API-Model": "straightforward",
@@ -452,11 +463,11 @@ export class Gris {
       "Application-ID": this.applicationId.toString(),
       "Time-Zone": "JST",
       "Region": "392",
-      "X-BUNDLE-ID": "klb.android.lovelive",
+      "X-BUNDLE-ID": "jp.klab.lovelive",
     }
   }
 
-  public getPlatformString() {
+  protected getPlatformString() {
     return this.platformType === platformType.iOS ? "iOS" : "Android"
   }
 
@@ -545,14 +556,13 @@ export class Gris {
       typeof this.keychain.loginKey !== "string" ||
       typeof this.keychain.loginPasswd !== "string"
     ) throw new Error(`login key and login passwd required to pass auth stage ._.`)
-
     const clientKey = crypto.randomBytes(32)
     this.keychain.sessionKey = xor(xor(this.keychain.applicationKey, this.keychain.baseKey), clientKey)
     const authKeyRequestData = {
       auth_data: aes128cbcEncrypt(JSON.stringify({
         1: this.keychain.loginKey,
         2: this.keychain.loginPasswd,
-        3: this.getAssertation(),
+        3: Buffer.from(JSON.stringify(this.getDeviceInfo())).toString("base64"),
       }), clientKey.slice(0, 16), clientKey.slice(16, 32)),
       dummy_token: crypto.publicEncrypt({
         key: this.keychain.rsaPublicKey,
@@ -561,18 +571,18 @@ export class Gris {
     }
 
     const authKeyResponseData = await this.APIRequest("login/authkey", authKeyRequestData, {
-      excludeDefaultValues: true,
+      excludeDefaultParams: true,
     })
     this.session.authToken = authKeyResponseData.response_data.authorize_token
     this.keychain.sessionKey = xor(clientKey, Buffer.from(authKeyResponseData.response_data.dummy_token, "base64"))
   }
 
   /**
-   * Creates SIF like multipart.
+   * Create SIF-like multipart
    *
-   * @param requestBody content that we want to send to the server
+   * @param requestBody content we want to send to the server
    *
-   * @returns [contentType, body]
+   * @returns [contentTypeHeader, body]
    */
   private createMultipart(requestBody: string): [string, string] {
     // generate random 16 chars for boundary
@@ -582,10 +592,12 @@ export class Gris {
     return [contentType, body]
   }
 
-  private getAssertation() {
+  private getDeviceInfo() {
     switch (this.platformType) {
       case platformType.iOS: {
-        return "ewoJIlJhdGluZyI6IjAiLAoJIkRldGFpbCI6IlRoaXMgaXMgYSBpT1MgZGV2aWNlIgp9"
+        return {
+          Hardware: "iOS",
+        }
       }
       case platformType.Android: {
         throw new Error("TODO?")
