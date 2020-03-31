@@ -24,8 +24,8 @@ const defaultHost = "https://prod-jp.lovelive.ge.klabgames.net"
 const defaultApplicationId = 626776655    // application ID in iTunes
 const defaultPlatform: platformType = platformType.iOS
 const defaultOsVersion = "iPhone10_1 iPhone 11.3"
-const defaultClientVersion = "42.4"
-const defaultBundleVersion = "6.10.2"
+const defaultClientVersion = "43.3"
+const defaultBundleVersion = "6.11.1"
 const defaultNames = [
   "真面目な学院生", "明るい学院生", "心優しい学院生", "アイドル好きの学院生", "期待の学院生", "頼りになる学院生",
   "素直な学院生", "さすらいの学院生", "気になる学院生", "憧れの学院生", "元気な学院生", "勇敢な学院生", "さわやかな学院生",
@@ -424,30 +424,42 @@ export class Gris {
   }
 
   public async updateVersionInfo(): Promise<void> {
-    this.session.bundleVersion = await this.getLatestBundleVersion()
-    this.session.clientVersion = await this.getLatestServerVersion()
+    this.session.bundleVersion = await this.getLatestBundleVersion() || this.session.bundleVersion
+    this.session.clientVersion = await this.getLatestServerVersion() || this.session.clientVersion
   }
 
   /**
    * Get latest version of application from iTunes
    * @param applicationId Application ID
    * @returns {string} Latest version of app in iTunes
+   * @returns {null} If service not available
    */
-  public async getLatestBundleVersion(applicationId?: number | string): Promise<string> {
-    if (!applicationId) applicationId = this.applicationId
-    const url = `https://itunes.apple.com/lookup?id=${applicationId}&lang=ja_jp&country=jp&rnd=${getRandomNumber(10000000, 99999999)}`
-    const response = await request.get(url)
-    return JSON.parse(response.text).results[0].version
+  public async getLatestBundleVersion(applicationId?: number | string): Promise<string | null> {
+    try {
+      if (!applicationId) applicationId = this.applicationId
+      const url = `https://itunes.apple.com/lookup?id=${applicationId}&lang=ja_jp&country=jp&rnd=${getRandomNumber(10000000, 99999999)}`
+      const response = await request.get(url)
+      return JSON.parse(response.text).results[0].version
+    } catch(err) {
+      debug(err)
+      return null
+    }
   }
 
   /**
    * Used to retrieve current version of server from llsif.win
    * @returns {string} Current server version
+   * @returns {null} If service not available
    */
-  public async getLatestServerVersion(): Promise<string> {
-    const url = "https://r.llsif.win/config/server_info.json"
-    const response = await request.get(url)
-    return JSON.parse(response.text).server_version
+  public async getLatestServerVersion(): Promise<string | null> {
+    try {
+      const url = "https://r.llsif.win/config/server_info.json"
+      const response = await request.get(url)
+      return JSON.parse(response.text).server_version
+    } catch (err) {
+      debug(err)
+      return null
+    }
   }
 
   protected getHeaders() {
